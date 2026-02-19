@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VIBRANT | Luxury UI Dashboard</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;900&family=Playfair+Display:ital,wght@1,900&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --accent: #ff0000; }
+        body { background: #000; color: #fff; font-family: 'Outfit', sans-serif; overflow: hidden; height: 100vh; touch-action: none; }
+        .serif { font-family: 'Playfair Display', serif; }
+        
+        /* The Shadow Gallery Style */
+        .main-stage {
+            background: radial-gradient(circle at 50% 40%, var(--accent) -100%, #000 75%);
+            transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fruit-hero { filter: drop-shadow(0 30px 60px rgba(0,0,0,0.9)); z-index: 30; transition: transform 0.1s ease-out; }
+        .juice-hero { mix-blend-mode: screen; opacity: 0; transform: scale(0.6); z-index: 20; pointer-events: none; }
+        
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(30px);
+            border-top: 1px solid rgba(255,255,255,0.15);
+            border-radius: 40px 40px 0 0;
+            box-shadow: 0 -20px 40px rgba(0,0,0,0.5);
+        }
+
+        #loader {
+            position: fixed; inset: 0; background: #000; z-index: 1000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        .zoom-stage { width: 100%; height: 50vh; display: flex; align-items: center; justify-content: center; position: relative; }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="serif text-5xl italic animate-pulse">Vibrant</div>
+        <p class="text-[10px] tracking-[0.5em] mt-4 opacity-40">FETCHING LIVE ARCHIVE</p>
+    </div>
+
+    <main class="main-stage relative h-screen w-full flex flex-col justify-between overflow-hidden">
+        
+        <div class="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+            <h1 id="bg-number" class="text-[55vw] font-black italic serif">01</h1>
+        </div>
+
+        <nav class="p-8 flex justify-between items-center relative z-50">
+            <span class="font-black tracking-tighter text-xl">VIBRANT.</span>
+            <div id="sync-status" class="text-[9px] bg-white/10 px-3 py-1 rounded-full border border-white/20 uppercase tracking-widest">Live Sync</div>
+        </nav>
+
+        <div class="zoom-stage" id="interaction-zone">
+            <img id="view-juice" src="" class="juice-hero absolute w-[260px]">
+            <img id="view-fruit" src="" class="fruit-hero w-[300px] cursor-pointer" 
+                 onclick="executeCut()" 
+                 ontouchstart="startPinch(event)" 
+                 ontouchmove="movePinch(event)">
+        </div>
+
+        <section id="ui-card" class="glass-panel p-8 pb-10 space-y-6 relative z-40 translate-y-full">
+            <div class="flex justify-between items-end">
+                <div class="space-y-1">
+                    <span id="fruit-category" class="text-[10px] uppercase tracking-widest opacity-40 font-bold">Scientific Analysis</span>
+                    <h2 id="fruit-title" class="serif text-4xl italic leading-none">...</h2>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="navStep(-1)" class="w-12 h-12 border border-white/20 rounded-full flex items-center justify-center active:bg-white active:text-black transition">←</button>
+                    <button onclick="navStep(1)" class="w-12 h-12 border border-white/20 rounded-full flex items-center justify-center active:bg-white active:text-black transition">→</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-5 border-t border-white/10 pt-6">
+                <div class="bg-white/5 p-4 rounded-2xl">
+                    <span class="text-[9px] font-black uppercase text-white/30 tracking-widest">Liquid Profit (Juice)</span>
+                    <p id="desc-juice" class="text-xs mt-2 leading-relaxed font-light"></p>
+                </div>
+                <div class="bg-white/5 p-4 rounded-2xl opacity-60">
+                    <span class="text-[9px] font-black uppercase text-white/30 tracking-widest">Structural Profit (Slice)</span>
+                    <p id="desc-slice" class="text-xs mt-2 leading-relaxed font-light"></p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 1. YOUR APPS SCRIPT URL HERE
+        const DEPLOYED_SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+        
+        let fruitVault = [];
+        let index = 0;
+        let cutDone = false;
+        let initDist = 0;
+        let scaleVal = 1;
+
+        async function bootSystem() {
+            try {
+                const response = await fetch(DEPLOYED_SCRIPT_URL);
+                fruitVault = await response.json();
+                loadContent();
+                
+                gsap.to("#loader", { opacity: 0, duration: 1, onComplete: () => {
+                    document.getElementById('loader').remove();
+                    gsap.to("#ui-card", { y: 0, duration: 1.2, ease: "expo.out" });
+                }});
+            } catch (err) {
+                console.error("Link Error");
+                document.querySelector('#loader p').innerText = "CONNECTION FAILED - CHECK URL";
+            }
+        }
+
+        function loadContent() {
+            const f = fruitVault[index];
+            cutDone = false;
+            scaleVal = 1;
+
+            document.body.style.setProperty('--accent', f.Color || '#ff0000');
+            document.getElementById('bg-number').innerText = (index + 1).toString().padStart(2, '0');
+            document.getElementById('fruit-title').innerText = f.Title;
+            document.getElementById('desc-juice').innerText = f.JuiceProfit;
+            document.getElementById('desc-slice').innerText = f.SliceProfit;
+            document.getElementById('view-fruit').src = f.FruitImg;
+            document.getElementById('view-juice').src = f.JuiceImg;
+
+            gsap.set("#view-juice", { opacity: 0, scale: 0.5 });
+            gsap.fromTo("#view-fruit", { scale: 0, rotation: -15, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 1, ease: "expo.out" });
+        }
+
+        function executeCut() {
+            if (cutDone) return;
+            cutDone = true;
+            
+            const tl = gsap.timeline();
+            tl.to("#view-fruit", { scale: 1.8, opacity: 0, filter: "blur(30px)", duration: 0.4 });
+            tl.to("#view-juice", { opacity: 1, scale: 1, duration: 1.2, ease: "elastic.out(1, 0.7)" }, "-=0.2");
+        }
+
+        function navStep(dir) {
+            index = (index + dir + fruitVault.length) % fruitVault.length;
+            gsap.to("main", { opacity: 0.3, duration: 0.3, onComplete: () => {
+                loadContent();
+                gsap.to("main", { opacity: 1, duration: 0.5 });
+            }});
+        }
+
+        // --- Pinch to Zoom ---
+        function startPinch(e) {
+            if (e.touches.length === 2) {
+                initDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            }
+        }
+
+        function movePinch(e) {
+            if (e.touches.length === 2) {
+                let currentDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                let zoomFactor = currentDist / initDist;
+                scaleVal = Math.min(Math.max(0.5, scaleVal * zoomFactor), 2.5);
+                document.getElementById('view-fruit').style.transform = `scale(${scaleVal})`;
+                initDist = currentDist;
+            }
+        }
+
+        // Swipe Gestures
+        const mc = new Hammer(document.body);
+        mc.on("swipeleft", () => navStep(1));
+        mc.on("swiperight", () => navStep(-1));
+
+        bootSystem();
+    </script>
+</body>
+</html>
